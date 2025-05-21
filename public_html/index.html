@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Shipment Management</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+    
+    <style>
+        .btn-primary {
+            background-color: #5b9bd5;
+            border-color: #5b9bd5;
+            margin: 0 5px;
+            min-width: 80px;
+        }
+        .btn-primary:hover,
+        .btn-primary:focus,
+        .btn-primary:active {
+            background-color: #4a8bc6;
+            border-color: #4a8bc6;
+        }
+    </style>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://login2explore.com/jpdb/resources/js/0.0.3/jpdb-commons.js"></script>
+    
+    <script>
+        const TOKEN = "90934673|-31949205234986725|90956116";
+        const DB = "DELIVERY-DB";
+        const TABLE = "SHIPMENT-TABLE";
+        const BASE_URL = "http://api.login2explore.com:5577";
+        const IML = "/api/iml";
+        const IRL = "/api/irl";
+
+        function clearForm() {
+            $("#shipmentNo").val("").prop("disabled", false).focus();
+            $("#description, #source, #destination, #shippingDate, #deliveryDate").val("").prop("disabled", true);
+            $("#saveBtn, #updateBtn").prop("disabled", true);
+            $("#resetBtn").prop("disabled", false);
+        }
+
+        function enableFields() {
+            $("#description, #source, #destination, #shippingDate, #deliveryDate").prop("disabled", false);
+        }
+
+        function disableAllControls() {
+            $("#shipmentNo, #description, #source, #destination, #shippingDate, #deliveryDate").prop("disabled", true);
+            $("#saveBtn, #updateBtn, #resetBtn").prop("disabled", true);
+        }
+
+        function getShipmentData() {
+            return {
+                shipmentNo: $("#shipmentNo").val(),
+                description: $("#description").val(),
+                source: $("#source").val(),
+                destination: $("#destination").val(),
+                shippingDate: $("#shippingDate").val(),
+                deliveryDate: $("#deliveryDate").val()
+            };
+        }
+
+        function validateForm() {
+            const data = getShipmentData();
+            for (let key in data) {
+                if (data[key].trim() === "") {
+                    alert(`${key} is required`);
+                    $(`#${key}`).focus();
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function saveShipment() {
+            if (!validateForm()) return;
+
+            disableAllControls();
+            const shipmentData = JSON.stringify(getShipmentData());
+            const saveRequest = createPUTRequest(TOKEN, shipmentData, DB, TABLE);
+            
+            $.ajaxSetup({ async: false });
+            const response = executeCommandAtGivenBaseUrl(saveRequest, BASE_URL, IML);
+            $.ajaxSetup({ async: true });
+
+            if (response.status === 200) {
+                alert("Shipment saved successfully!");
+                clearForm();
+            } else {
+                alert("Save failed: " + (response.message || "Unknown error"));
+                console.error("Save error:", response);
+                enableFields();
+                $("#saveBtn, #resetBtn").prop("disabled", false);
+            }
+        }
+
+        function updateShipment(recordNumber) {
+            if (!validateForm()) return;
+
+            disableAllControls();
+            const updatedData = JSON.stringify(getShipmentData());
+            const updateRequest = createUPDATERecordRequest(TOKEN, updatedData, DB, TABLE, recordNumber);
+            
+            $.ajaxSetup({ async: false });
+            const response = executeCommandAtGivenBaseUrl(updateRequest, BASE_URL, IML);
+            $.ajaxSetup({ async: true });
+
+            if (response.status === 200) {
+                alert("Shipment updated successfully!");
+                clearForm();
+            } else {
+                alert("Update failed: " + (response.message || "Unknown error"));
+                console.error("Update error:", response);
+                enableFields();
+                $("#updateBtn, #resetBtn").prop("disabled", false);
+            }
+        }
+
+        function fetchShipmentData() {
+            const shipmentNo = $("#shipmentNo").val().trim();
+            if (!shipmentNo) return;
+
+            disableAllControls();
+            const requestObj = { shipmentNo: shipmentNo };
+            const getRequest = createGET_BY_KEYRequest(TOKEN, DB, TABLE, JSON.stringify(requestObj));
+
+            $.ajaxSetup({ async: false });
+            const response = executeCommandAtGivenBaseUrl(getRequest, BASE_URL, IRL);
+            $.ajaxSetup({ async: true });
+
+            if (response.status === 400) {
+              
+                $("#shipmentNo").prop("disabled", false);
+                enableFields();
+                $("#saveBtn, #resetBtn").prop("disabled", false);
+                $("#description").focus();
+            } else if (response.status === 200) {
+                
+                const data = JSON.parse(response.data);
+                const record = data.record;
+
+                $("#shipmentNo").val(record.shipmentNo).prop("disabled", true);
+                $("#description").val(record.description);
+                $("#source").val(record.source);
+                $("#destination").val(record.destination);
+                $("#shippingDate").val(record.shippingDate);
+                $("#deliveryDate").val(record.deliveryDate);
+
+                enableFields();
+                $("#updateBtn").prop("disabled", false).data("rec_no", data.rec_no);
+                $("#resetBtn").prop("disabled", false);
+                $("#saveBtn").prop("disabled", true);
+                $("#description").focus();
+            } else {
+                alert("Error retrieving shipment: " + (response.message || "Unknown error"));
+                console.error("Fetch error:", response);
+                clearForm();
+            }
+        }
+
+        $(document).ready(function () {
+            clearForm();
+
+            $("#shipmentNo").on("blur", function () {
+                if ($(this).val().trim() !== "") {
+                    fetchShipmentData();
+                }
+            });
+
+            $("#saveBtn").on("click", saveShipment);
+
+            $("#updateBtn").on("click", function () {
+                updateShipment($(this).data("rec_no"));
+            });
+
+            $("#resetBtn").on("click", clearForm);
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h2>Shipment Management Form</h2>
+        <form id="shipmentForm">
+            <div class="form-group">
+                <label for="shipmentNo">Shipment No (Primary Key):</label>
+                <input type="text" class="form-control" id="shipmentNo">
+            </div>
+            <div class="form-group">
+                <label for="description">Description:</label>
+                <input type="text" class="form-control" id="description">
+            </div>
+            <div class="form-group">
+                <label for="source">Source:</label>
+                <input type="text" class="form-control" id="source">
+            </div>
+            <div class="form-group">
+                <label for="destination">Destination:</label>
+                <input type="text" class="form-control" id="destination">
+            </div>
+            <div class="form-group">
+                <label for="shippingDate">Shipping Date:</label>
+                <input type="date" class="form-control" id="shippingDate">
+            </div>
+            <div class="form-group">
+                <label for="deliveryDate">Expected Delivery Date:</label>
+                <input type="date" class="form-control" id="deliveryDate">
+            </div>
+            <div class="text-center">
+                <button type="button" class="btn btn-primary" id="saveBtn">Save</button>
+                <button type="button" class="btn btn-primary" id="updateBtn">Update</button>
+                <button type="button" class="btn btn-primary" id="resetBtn">Reset</button>
+            </div>
+        </form>
+    </div>
+</body>
+</html>
